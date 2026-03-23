@@ -40,14 +40,26 @@ class RAGAssistant:
         os.makedirs(DATA_DIR, exist_ok=True)
         self.embedder = None
 
-        # ToDo: Adaugat o propozitie de referinta mai specifica pentru domeniul dvs
         self.relevance = self._embed_texts(
-            "Aceasta este o intrebare relevanta despre ...",
+            "Industrial asset inspection, visual intelligence, predictive maintenance, "
+            "equipment inventory digitization, computer vision for infrastructure, "
+            "drone inspection, corrosion detection, telecom tower audit, "
+            "asset condition monitoring, digital twin, equipment defect detection, "
+            "VAIP platform, sensor monitoring, industrial IoT, "
+            "inspectia activelor industriale, mentenanta predictiva, detectia coroziunii, "
+            "inventar echipamente, inspectie drone, monitorizare stare echipamente",
         )[0]
 
-        # ToDo: Definiti un prompt de sistem mai detaliat pentru a ghida raspunsurile LLM-ului in directia dorita
         self.system_prompt = (
-            "..."
+            "You are VAIP Assistant, the expert AI advisor for the Visual Asset Intelligence Platform. "
+            "VAIP is a SaaS product that converts field photos, videos and drone footage of industrial assets "
+            "into structured inventory data, condition analytics dashboards and predictive maintenance insights. "
+            "Your expertise covers: computer vision for industrial equipment detection, automated inventory structuring, "
+            "condition and risk analytics (corrosion, leaks, damage), drone and video processing for site scanning, "
+            "integration with ERP/CMMS systems, and deployment across telecom, energy, utilities and heavy industry. "
+            "Answer questions clearly and professionally. Use concrete examples when possible. "
+            "If you are given context from our knowledge base, prioritize that information in your answer. "
+            "Do not answer questions unrelated to industrial asset management, visual inspection or the VAIP platform."
         )
 
 
@@ -88,13 +100,17 @@ class RAGAssistant:
 
         system_msg = self.system_prompt
 
-        # ToDo: Ajustati acest prompt pentru a se potrivi mai bine cu domeniul dvs si pentru a ghida LLM-ul sa ofere raspunsuri mai relevante si structurate.
         messages = [
             {"role": "system", "content": system_msg},
             {
                 "role": "user",
                 "content": (
-                    "..."
+                    f"Use the following context from our knowledge base to answer the question.\n\n"
+                    f"--- Context ---\n{context}\n--- End Context ---\n\n"
+                    f"User question: {user_input}\n\n"
+                    f"Provide a helpful, structured answer based on the context above. "
+                    f"If the context does not contain enough information, say so honestly "
+                    f"and offer what you know about the topic from your general knowledge."
                 ),
             },
         ]
@@ -102,7 +118,7 @@ class RAGAssistant:
         try:
             response = self.client.chat.completions.create(
                 messages=messages,
-                model="openai/gpt-oss-20b",
+                model=os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile"),
             )
             return response.choices[0].message.content
         except Exception:
@@ -215,26 +231,39 @@ class RAGAssistant:
         return [chunks[i] for i in indices[0] if i < len(chunks)]
 
     def calculate_similarity(self, text: str) -> float:
-        # ToDo: Ajustati aceasta propozitie de referinta pentru a se potrivi mai bine cu domeniul dvs, astfel incat sa reflecte mai precis ce inseamna "relevant" in contextul aplicatiei dvs.
-        """Returneaza similaritatea cu o propozitie de referinta despre ... ."""
+        """Returneaza similaritatea cu o propozitie de referinta despre inspectia si managementul activelor industriale."""
         embedding = self._embed_texts(text.strip())[0]
         return self._cosine_similarity(embedding, self.relevance)
 
     def is_relevant(self, user_input: str) -> bool:
-        # ToDo: Ajustati pragul de similaritate pentru a se potrivi mai bine cu domeniul dvs, astfel incat sa echilibreze corect intre a permite intrebari relevante si a respinge cele irelevante.
-        """Verifica daca intrarea utilizatorului e despre ...."""
-        return self.calculate_similarity(user_input) >= 0.5
+        """Verifica daca intrarea utilizatorului e despre inspectia si managementul activelor industriale."""
+        if self.calculate_similarity(user_input) >= 0.15:
+            return True
+        keywords = [
+            "vaip", "inspectie", "inspectia", "echipament", "coroziune", "mentenanta",
+            "predictiv", "inventar", "activ industrial", "active industriale", "drone",
+            "senzor", "defect", "monitorizare", "digital twin", "teren", "telecom",
+            "tower", "asset", "maintenance", "inspection", "corrosion", "equipment",
+            "inventory", "condition", "detection", "industrial", "infrastructure",
+        ]
+        lower_input = user_input.lower()
+        return any(kw in lower_input for kw in keywords)
 
     def assistant_response(self, user_message: str) -> str:
         """Directioneaza mesajul utilizatorului catre calea potrivita."""
         if not user_message:
-            # ToDo: Ajustati acest mesaj pentru a fi mai specific pentru domeniul dvs, astfel incat sa ghideze utilizatorii sa puna intrebari relevante si sa ofere un exemplu concret.
-            return "Te rog scrie un mesaj despre ... ."
+            return (
+                "Te rog scrie un mesaj legat de inspectia activelor industriale, "
+                "managementul inventarului sau mentenanta predictiva. "
+                "De exemplu: 'Cum detecteaza platforma coroziunea pe echipamente?'"
+            )
 
         if not self.is_relevant(user_message):
-            # ToDo: Ajustati acest mesaj pentru a fi mai specific pentru domeniul dvs, astfel incat sa ghideze utilizatorii sa puna intrebari relevante si sa ofere un exemplu concret.
             return (
-                "..."
+                "Intrebarea ta nu pare sa fie legata de inspectia activelor industriale "
+                "sau de platforma VAIP. Te rog sa pui intrebari despre: detectia echipamentelor, "
+                "inventarierea automata, analiza starii activelor, mentenanta predictiva "
+                "sau procesarea imaginilor si videourilor de pe teren."
             )
 
         chunks = self._load_documents_from_web()
@@ -244,6 +273,11 @@ class RAGAssistant:
 
 if __name__ == "__main__":
     assistant = RAGAssistant()
-    # ToDo: Testati cu intrebari relevante pentru domeniul dvs, precum si cu intrebari irelevante pentru a va asigura ca logica de filtrare functioneaza corect.
-    print(assistant.assistant_response("..."))  # test relevant
-    print(assistant.assistant_response("..."))  # test irelevant
+    print("=== Test relevant ===")
+    print(assistant.assistant_response("Cum poate platforma VAIP sa detecteze coroziunea pe echipamentele industriale?"))
+    print("\n=== Test relevant 2 ===")
+    print(assistant.assistant_response("What are the benefits of drone inspection for telecom towers?"))
+    print("\n=== Test irelevant ===")
+    print(assistant.assistant_response("Care este cea mai buna reteta de pizza?"))
+    print("\n=== Test mesaj gol ===")
+    print(assistant.assistant_response(""))
